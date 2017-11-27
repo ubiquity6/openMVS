@@ -55,6 +55,7 @@ unsigned nMaxThreads;
 unsigned nMaxMemory;
 String strExportType;
 String strConfigFileName;
+bool bOnlyExport;
 #if TD_VERBOSE != TD_VERBOSE_OFF
 bool bLogFile;
 #endif
@@ -75,6 +76,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		("working-folder,w", boost::program_options::value<std::string>(&WORKING_FOLDER), "working directory (default current directory)")
 		("config-file,c", boost::program_options::value<std::string>(&OPT::strConfigFileName)->default_value(APPNAME _T(".cfg")), "file name containing program options")
 		("export-type", boost::program_options::value<std::string>(&OPT::strExportType), "file type used to export the 3D scene (ply or obj)")
+		("only-export", boost::program_options::value<bool>(&OPT::bOnlyExport)->default_value(false), "do not start the viewer")
 		("archive-type", boost::program_options::value<unsigned>(&OPT::nArchiveType)->default_value(2), "project archive type: 0-text, 1-binary, 2-compressed binary")
 		("process-priority", boost::program_options::value<int>(&OPT::nProcessPriority)->default_value(0), "process priority (normal by default)")
 		("max-threads", boost::program_options::value<unsigned>(&OPT::nMaxThreads)->default_value(0), "maximum number of threads that this process should use (0 - use all available cores)")
@@ -208,18 +210,39 @@ int main(int argc, LPCTSTR* argv)
 	if (!Initialize(argc, argv))
 		return EXIT_FAILURE;
 
+        if (OPT::bOnlyExport && (OPT::strInputFileName.IsEmpty()))
+        {
+          GET_LOG() << _T("No input file but bOnlyExport was given.") << std::endl;
+          return EXIT_FAILURE;
+        }
 	// create viewer
 	Scene viewer;
+        if (!OPT::bOnlyExport)
+        {
 	if (!viewer.Init(1280, 720, APPNAME,
 			OPT::strInputFileName.IsEmpty() ? NULL : MAKE_PATH_SAFE(OPT::strInputFileName).c_str(),
 			OPT::strMeshFileName.IsEmpty() ? NULL : MAKE_PATH_SAFE(OPT::strMeshFileName).c_str()))
 		return EXIT_FAILURE;
-	if (viewer.IsOpen() && !OPT::strOutputFileName.IsEmpty()) {
+        }
+        else
+        {
+          GET_LOG() << _T("OpenOnlyExport") << std::endl;
+          if (!viewer.OpenOnlyExport(
+			OPT::strInputFileName.IsEmpty() ? NULL : MAKE_PATH_SAFE(OPT::strInputFileName).c_str(),
+			OPT::strMeshFileName.IsEmpty() ? NULL : MAKE_PATH_SAFE(OPT::strMeshFileName).c_str()))
+          {
+            GET_LOG() << _T("Exit failure.") << std::endl;
+            return EXIT_FAILURE;
+          }
+        }
+	if (((OPT::bOnlyExport && viewer.IsOpenOnlyExport()) || (!OPT::bOnlyExport && viewer.IsOpen()))  && !OPT::strOutputFileName.IsEmpty()) {
+              GET_LOG() << _T("Export.") << std::endl;
 		// export the scene
 		viewer.Export(MAKE_PATH_SAFE(OPT::strOutputFileName), OPT::strExportType.IsEmpty()?LPCTSTR(NULL):OPT::strExportType.c_str(), OPT::bLosslessTexture);
 	}
+        if (!OPT::bOnlyExport)
 	// enter viewer loop
-	viewer.Loop();
+	  viewer.Loop();
 
 	Finalize();
 	return EXIT_SUCCESS;

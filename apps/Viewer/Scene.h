@@ -81,9 +81,11 @@ public:
 	void ReleaseMesh();
 	inline bool IsValid() const { return window.IsValid(); }
 	inline bool IsOpen() const { return IsValid() && !scene.IsEmpty(); }
+	inline bool IsOpenOnlyExport() const { return !scene.IsEmpty(); }
 	inline bool IsOctreeValid() const { return avgScale > 0; }
 
 	bool Init(int width, int height, LPCTSTR windowName, LPCTSTR fileName=NULL, LPCTSTR meshFileName=NULL);
+	bool OpenOnlyExport(LPCTSTR fileName, LPCTSTR meshFileName=NULL);
 	bool Open(LPCTSTR fileName, LPCTSTR meshFileName=NULL);
 	bool Export(LPCTSTR fileName, LPCTSTR exportType=NULL, bool losslessTexture=false) const;
 	void CompilePointCloud();

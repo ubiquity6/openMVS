@@ -339,6 +339,79 @@ bool Scene::Init(int width, int height, LPCTSTR windowName, LPCTSTR fileName, LP
 	window.SetVisible(true);
 	return true;
 }
+bool Scene::OpenOnlyExport(LPCTSTR fileName, LPCTSTR meshFileName)
+{
+	ASSERT(fileName);
+	DEBUG_EXTRA("Loading: '%s'", Util::getFileFullName(fileName).c_str());
+	Empty();
+	sceneName = fileName;
+
+	// load the scene
+	WORKING_FOLDER = Util::getFilePath(fileName);
+	INIT_WORKING_FOLDER;
+	if (!scene.Load(fileName))
+		return false;
+	if (meshFileName) {
+		// load given mesh
+		scene.mesh.Load(meshFileName);
+	}
+	if (scene.IsEmpty())
+		return false;
+
+#if 1
+        return true;
+#else
+	#if 1
+	// create octree structure used to accelerate selection functionality
+	events.AddEvent(new EVTComputeOctree(this));
+	#endif
+
+	// init scene
+	AABB3d bounds(true);
+	if (!scene.pointcloud.IsEmpty()) {
+		bounds = scene.pointcloud.GetAABB(3);
+		if (bounds.IsEmpty())
+			bounds = scene.pointcloud.GetAABB();
+	}
+	if (!scene.mesh.IsEmpty()) {
+		scene.mesh.ComputeNormalFaces();
+		bounds.Insert(scene.mesh.GetAABB());
+	}
+
+	// init images
+	images.Reserve(scene.images.size());
+	FOREACH(idxImage, scene.images) {
+		const MVS::Image& imageData = scene.images[idxImage];
+		if (!imageData.IsValid())
+			continue;
+		images.AddConstruct(idxImage);
+	}
+
+	// init and load texture
+	if (scene.mesh.HasTexture()) {
+		Image& image = textures.AddEmpty();
+		ASSERT(image.idx == NO_ID);
+		#if 0
+		cv::flip(scene.mesh.textureDiffuse, scene.mesh.textureDiffuse, 0);
+		image.SetImage(scene.mesh.textureDiffuse);
+		scene.mesh.textureDiffuse.release();
+		#else // preserve texture, used only to be able to export the mesh
+		Image8U3 textureDiffuse;
+		cv::flip(scene.mesh.textureDiffuse, textureDiffuse, 0);
+		image.SetImage(textureDiffuse);
+		#endif
+		image.GenerateMipmap();
+	}
+
+	// init display lists
+	// compile point-cloud
+	CompilePointCloud();
+	// compile mesh
+	CompileMesh();
+
+	return true;
+#endif
+}
 bool Scene::Open(LPCTSTR fileName, LPCTSTR meshFileName)
 {
 	ASSERT(fileName);
@@ -417,7 +490,7 @@ bool Scene::Open(LPCTSTR fileName, LPCTSTR meshFileName)
 // export the scene
 bool Scene::Export(LPCTSTR _fileName, LPCTSTR exportType, bool losslessTexture) const
 {
-	if (!IsOpen())
+	if (!IsOpenOnlyExport())
 		return false;
 	ASSERT(!sceneName.IsEmpty());
 	String lastFileName;
