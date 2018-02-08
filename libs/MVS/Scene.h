@@ -79,6 +79,8 @@ public:
 	bool DenseReconstruction();
 	void DenseReconstructionEstimate(void*);
 	void DenseReconstructionFilter(void*);
+  bool ComputeDepthMap(const int &i);
+  bool MergeDepthMaps();
 
 	// Mesh reconstruction
 	bool ReconstructMesh(float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,

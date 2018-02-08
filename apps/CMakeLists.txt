@@ -1,6 +1,8 @@
 # Add applications
 ADD_SUBDIRECTORY(InterfaceVisualSFM)
 ADD_SUBDIRECTORY(DensifyPointCloud)
+ADD_SUBDIRECTORY(MergeDepthMaps)
+ADD_SUBDIRECTORY(ComputeDepthMap)
 ADD_SUBDIRECTORY(ReconstructMesh)
 ADD_SUBDIRECTORY(RefineMesh)
 ADD_SUBDIRECTORY(TextureMesh)
