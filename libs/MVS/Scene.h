@@ -81,6 +81,8 @@ public:
 	void DenseReconstructionFilter(void*);
   bool ComputeDepthMap(const int &i);
   bool MergeDepthMaps();
+  // nFirstFrame is included, nLastFrame not
+  bool FilterDepthMaps(const int nFirstFrame = -1, const int nLastFrame = -1);
 
 	// Mesh reconstruction
 	bool ReconstructMesh(float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,

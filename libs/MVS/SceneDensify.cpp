@@ -917,7 +917,7 @@ bool DepthMapsData::GapInterpolation(DepthData& depthData)
 					const Depth avg((depthFirst+depth)*0.5f);
 					do {
 						depthMap(v,u_curr) = avg;
-					} while (++u_curr<u);						
+					} while (++u_curr<u);
 					#else
 					// interpolate values
 					const Depth diff((depth-depthFirst)/(count+1));
@@ -927,7 +927,7 @@ bool DepthMapsData::GapInterpolation(DepthData& depthData)
 						do {
 							depthMap(v,u_curr) = (d+=diff);
 							if (!confMap.empty()) confMap(v,u_curr) = c;
-						} while (++u_curr<u);						
+						} while (++u_curr<u);
 					} else {
 						Point2f dir1, dir2;
 						Normal2Dir(normalMap(v,u_first), dir1);
@@ -938,7 +938,7 @@ bool DepthMapsData::GapInterpolation(DepthData& depthData)
 							dir1 += dirDiff;
 							Dir2Normal(dir1, normalMap(v,u_curr));
 							if (!confMap.empty()) confMap(v,u_curr) = c;
-						} while (++u_curr<u);						
+						} while (++u_curr<u);
 					}
 					#endif
 				}
@@ -983,7 +983,7 @@ bool DepthMapsData::GapInterpolation(DepthData& depthData)
 					const Depth avg((depthFirst+depth)*0.5f);
 					do {
 						depthMap(v_curr,u) = avg;
-					} while (++v_curr<v);						
+					} while (++v_curr<v);
 					#else
 					// interpolate values
 					const Depth diff((depth-depthFirst)/(count+1));
@@ -993,7 +993,7 @@ bool DepthMapsData::GapInterpolation(DepthData& depthData)
 						do {
 							depthMap(v_curr,u) = (d+=diff);
 							if (!confMap.empty()) confMap(v_curr,u) = c;
-						} while (++v_curr<v);						
+						} while (++v_curr<v);
 					} else {
 						Point2f dir1, dir2;
 						Normal2Dir(normalMap(v_first,u), dir1);
@@ -1004,7 +1004,7 @@ bool DepthMapsData::GapInterpolation(DepthData& depthData)
 							dir1 += dirDiff;
 							Dir2Normal(dir1, normalMap(v_curr,u));
 							if (!confMap.empty()) confMap(v_curr,u) = c;
-						} while (++v_curr<v);						
+						} while (++v_curr<v);
 					}
 					#endif
 				}
@@ -1556,9 +1556,9 @@ bool Scene::ComputeDepthMap(const int &i)
 			}
 			imageData.UpdateCamera(platforms);
 			// print image camera
-			DEBUG_ULTIMATE("K%d = \n%s", idxImage, cvMat2String(imageData.camera.K).c_str());
-			DEBUG_LEVEL(3, "R%d = \n%s", idxImage, cvMat2String(imageData.camera.R).c_str());
-			DEBUG_LEVEL(3, "C%d = \n%s", idxImage, cvMat2String(imageData.camera.C).c_str());
+			//DEBUG_ULTIMATE("K%d = \n%s", idxImage, cvMat2String(imageData.camera.K).c_str());
+			//DEBUG_LEVEL(3, "R%d = \n%s", idxImage, cvMat2String(imageData.camera.R).c_str());
+			//DEBUG_LEVEL(3, "C%d = \n%s", idxImage, cvMat2String(imageData.camera.C).c_str());
 		}
 		#ifdef DENSE_USE_OPENMP
 		if (bAbort || data.images.IsEmpty()) {
@@ -1622,13 +1622,11 @@ bool Scene::ComputeDepthMap(const int &i)
   if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
       // process next image
   }
-  std::cout << "Estimating depth map" << i << std::endl;
   data.detphMaps.EstimateDepthMap(i);
-  // apply filters
-  data.detphMaps.RemoveSmallSegments(depthData);
-  data.detphMaps.GapInterpolation(depthData);
   // Export
-  depthData.Save(ComposeDepthFilePath(i, "dmap"));
+  std::string strPath = ComposeDepthFilePath(i, "dmap");
+  depthData.Save(strPath);
+  VERBOSE("Performed depth map calculation for %s.", strPath.c_str());
   depthData.ReleaseImages();
   depthData.Release();
 	return true;
@@ -1688,9 +1686,9 @@ bool Scene::MergeDepthMaps()
 			}
 			imageData.UpdateCamera(platforms);
 			// print image camera
-			DEBUG_ULTIMATE("K%d = \n%s", idxImage, cvMat2String(imageData.camera.K).c_str());
-			DEBUG_LEVEL(3, "R%d = \n%s", idxImage, cvMat2String(imageData.camera.R).c_str());
-			DEBUG_LEVEL(3, "C%d = \n%s", idxImage, cvMat2String(imageData.camera.C).c_str());
+			//DEBUG_ULTIMATE("K%d = \n%s", idxImage, cvMat2String(imageData.camera.K).c_str());
+			//DEBUG_LEVEL(3, "R%d = \n%s", idxImage, cvMat2String(imageData.camera.R).c_str());
+			//DEBUG_LEVEL(3, "C%d = \n%s", idxImage, cvMat2String(imageData.camera.C).c_str());
 		}
 		#ifdef DENSE_USE_OPENMP
 		if (bAbort || data.images.IsEmpty()) {
@@ -2101,6 +2099,148 @@ void Scene::DenseReconstructionEstimate(void* pData)
 	}
 } // DenseReconstructionDepthMapEstimate
 /*----------------------------------------------------------------*/
+
+ bool Scene::FilterDepthMaps(const int nFirstFrame, const int nLastFrame)
+{
+	DenseDepthMapData data(*this);
+  int nStartFrame = nFirstFrame;
+  if (nFirstFrame == -1)
+  {
+      nStartFrame = 0;
+  }
+  int nEndFrame = nFirstFrame;
+  if (nLastFrame == -1 || nLastFrame > data.images.GetSize())
+  {
+      nEndFrame = data.images.GetSize();
+  }
+
+	{
+	// maps global view indices to our list of views to be processed
+	IndexArr imagesMap;
+
+	// prepare images for dense reconstruction (load if needed)
+	{
+		TD_TIMER_START();
+		data.images.Reserve(images.GetSize());
+		imagesMap.Resize(images.GetSize());
+		#ifdef DENSE_USE_OPENMP
+		bool bAbort(false);
+		#pragma omp parallel for shared(data, bAbort)
+		for (int_t ID=nStartFrame; ID<(int_t)nEndFrame; ++ID) {
+			#pragma omp flush (bAbort)
+			if (bAbort)
+				continue;
+			const uint32_t idxImage((uint32_t)ID);
+		#else
+		FOREACH(idxImage, images) {
+		#endif
+			// skip invalid, uncalibrated or discarded images
+			Image& imageData = images[idxImage];
+			if (!imageData.IsValid()) {
+				#ifdef DENSE_USE_OPENMP
+				#pragma omp critical
+				#endif
+				imagesMap[idxImage] = NO_ID;
+				continue;
+			}
+			// map image index
+			#ifdef DENSE_USE_OPENMP
+			#pragma omp critical
+			#endif
+			{
+				imagesMap[idxImage] = (uint32_t)data.images.GetSize();
+				data.images.Insert(idxImage);
+			}
+			// reload image at the appropriate resolution
+			const unsigned nMaxResolution(imageData.RecomputeMaxResolution(OPTDENSE::nResolutionLevel, OPTDENSE::nMinResolution));
+			if (!imageData.ReloadImage(nMaxResolution)) {
+				#ifdef DENSE_USE_OPENMP
+				bAbort = true;
+				#pragma omp flush (bAbort)
+				continue;
+				#else
+				return false;
+				#endif
+			}
+			imageData.UpdateCamera(platforms);
+			// print image camera
+			DEBUG_ULTIMATE("K%d = \n%s", idxImage, cvMat2String(imageData.camera.K).c_str());
+			DEBUG_LEVEL(3, "R%d = \n%s", idxImage, cvMat2String(imageData.camera.R).c_str());
+			DEBUG_LEVEL(3, "C%d = \n%s", idxImage, cvMat2String(imageData.camera.C).c_str());
+		}
+		#ifdef DENSE_USE_OPENMP
+		if (bAbort || data.images.IsEmpty()) {
+		#else
+		if (data.images.IsEmpty()) {
+		#endif
+			VERBOSE("error: preparing images for dense reconstruction failed (errors loading images)");
+			return false;
+		}
+		VERBOSE("Preparing images for dense reconstruction completed: %d images (%s)", images.GetSize(), TD_TIMER_GET_FMT().c_str());
+	}
+
+	// select images to be used for dense reconstruction
+	{
+		TD_TIMER_START();
+		// for each image, find all useful neighbor views
+		IndexArr invalidIDs;
+		#ifdef DENSE_USE_OPENMP
+		#pragma omp parallel for shared(data, invalidIDs)
+		for (int_t ID=0; ID<(int_t)data.images.GetSize(); ++ID) {
+			const uint32_t idx((uint32_t)ID);
+		#else
+		FOREACH(idx, data.images) {
+		#endif
+			const uint32_t idxImage(data.images[idx]);
+			ASSERT(imagesMap[idxImage] != NO_ID);
+			DepthData& depthData(data.detphMaps.arrDepthData[idxImage]);
+			if (!data.detphMaps.SelectViews(depthData)) {
+				#ifdef DENSE_USE_OPENMP
+				#pragma omp critical
+				#endif
+				invalidIDs.InsertSort(idx);
+			}
+		}
+		RFOREACH(i, invalidIDs) {
+			const uint32_t idx(invalidIDs[i]);
+			imagesMap[data.images.Last()] = idx;
+			imagesMap[data.images[idx]] = NO_ID;
+			data.images.RemoveAt(idx);
+		}
+		// globally select a target view for each reference image
+		if (OPTDENSE::nNumViews == 1 && !data.detphMaps.SelectViews(data.images, imagesMap, data.neighborsMap)) {
+			VERBOSE("error: no valid images to be dense reconstructed");
+			return false;
+		}
+		ASSERT(!data.images.IsEmpty());
+		VERBOSE("Selecting images for depth map filtration completed: %d images (%s)", data.images.GetSize(), TD_TIMER_GET_FMT().c_str());
+	}
+	}
+
+  for (size_t i = nStartFrame; i < nEndFrame; i++)
+  {
+      DepthData& depthData(data.detphMaps.arrDepthData[i]);
+			if (!depthData.Load(ComposeDepthFilePath(i, "dmap"))) {
+          DEBUG("Could not load an expected depth map.");
+      }
+      // init images pair: reference image and the best neighbor view
+      ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
+      if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
+          // process next image
+      }
+  }
+  for (size_t i = nStartFrame; i < nEndFrame; i++)
+  {
+      DepthData& depthData(data.detphMaps.arrDepthData[i]);
+      // apply filters
+      data.detphMaps.RemoveSmallSegments(depthData);
+      data.detphMaps.GapInterpolation(depthData);
+      std::string strPath = ComposeDepthFilePath(i, "dmap");
+      depthData.Save(strPath);
+      VERBOSE("Performed depth map filtration for %s.", strPath.c_str());
+  }
+  return true;
+} // DenseReconstructionDepthMap
 
 void* DenseReconstructionFilterTmp(void* arg) {
 	DenseDepthMapData& dataThreads = *((DenseDepthMapData*)arg);
