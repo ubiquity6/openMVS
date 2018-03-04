@@ -31,14 +31,31 @@
 
 #include "Common.h"
 #include "Scene.h"
+#include <sys/stat.h>
 // MRF: view selection
 #include "../Math/TRWS/MRFEnergy.h"
 // CGAL: depth-map initialization
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Delaunay_triangulation_2.h>
 #include <CGAL/Projection_traits_xy_3.h>
+#include <string>
+#include <fstream>
+
+std::ifstream::pos_type fileSize(const std::string filename) {
+    std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+    return in.tellg(); 
+}
+
+inline bool fileExistsAndIsNonZeroSize (const std::string& name) {
+    struct stat buffer;   
+    if (stat (name.c_str(), &buffer) == 0)
+    {
+        return (fileSize(name) > 0);
+    }
+}
 
 using namespace MVS;
+
 
 
 // D E F I N E S ///////////////////////////////////////////////////
@@ -1621,6 +1638,8 @@ bool Scene::ComputeDepthMap(const int &i)
   ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
   if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
       // process next image
+      VERBOSE("Not computing depth map because image %d is not selected.",i);
+      return false;
   }
   data.detphMaps.EstimateDepthMap(i);
   // Export
@@ -1742,6 +1761,10 @@ bool Scene::MergeDepthMaps()
   for (size_t i = 0; i < data.images.GetSize(); i++)
   {
       DepthData& depthData(data.detphMaps.arrDepthData[i]);
+      auto depthPath = ComposeDepthFilePath(i, "dmap");
+      if (!fileExistsAndIsNonZeroSize(depthPath))
+          continue;
+      depthData.Load(depthPath);
       // init images pair: reference image and the best neighbor view
       ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
       if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
@@ -2103,16 +2126,6 @@ void Scene::DenseReconstructionEstimate(void* pData)
  bool Scene::FilterDepthMaps(const int nFirstFrame, const int nLastFrame)
 {
 	DenseDepthMapData data(*this);
-  int nStartFrame = nFirstFrame;
-  if (nFirstFrame == -1)
-  {
-      nStartFrame = 0;
-  }
-  int nEndFrame = nFirstFrame;
-  if (nLastFrame == -1 || nLastFrame > data.images.GetSize())
-  {
-      nEndFrame = data.images.GetSize();
-  }
 
 	{
 	// maps global view indices to our list of views to be processed
@@ -2126,7 +2139,7 @@ void Scene::DenseReconstructionEstimate(void* pData)
 		#ifdef DENSE_USE_OPENMP
 		bool bAbort(false);
 		#pragma omp parallel for shared(data, bAbort)
-		for (int_t ID=nStartFrame; ID<(int_t)nEndFrame; ++ID) {
+		for (int_t ID=0; ID<(int_t)images.GetSize(); ++ID) {
 			#pragma omp flush (bAbort)
 			if (bAbort)
 				continue;
@@ -2164,9 +2177,9 @@ void Scene::DenseReconstructionEstimate(void* pData)
 			}
 			imageData.UpdateCamera(platforms);
 			// print image camera
-			DEBUG_ULTIMATE("K%d = \n%s", idxImage, cvMat2String(imageData.camera.K).c_str());
-			DEBUG_LEVEL(3, "R%d = \n%s", idxImage, cvMat2String(imageData.camera.R).c_str());
-			DEBUG_LEVEL(3, "C%d = \n%s", idxImage, cvMat2String(imageData.camera.C).c_str());
+			//DEBUG_ULTIMATE("K%d = \n%s", idxImage, cvMat2String(imageData.camera.K).c_str());
+			//DEBUG_LEVEL(3, "R%d = \n%s", idxImage, cvMat2String(imageData.camera.R).c_str());
+			//DEBUG_LEVEL(3, "C%d = \n%s", idxImage, cvMat2String(imageData.camera.C).c_str());
 		}
 		#ifdef DENSE_USE_OPENMP
 		if (bAbort || data.images.IsEmpty()) {
@@ -2213,14 +2226,18 @@ void Scene::DenseReconstructionEstimate(void* pData)
 			return false;
 		}
 		ASSERT(!data.images.IsEmpty());
-		VERBOSE("Selecting images for depth map filtration completed: %d images (%s)", data.images.GetSize(), TD_TIMER_GET_FMT().c_str());
+		VERBOSE("Selecting images for dense reconstruction completed: %d images (%s)", data.images.GetSize(), TD_TIMER_GET_FMT().c_str());
 	}
 	}
 
-  for (size_t i = nStartFrame; i < nEndFrame; i++)
+  for (size_t i = 0; i < images.GetSize(); i++)
   {
       DepthData& depthData(data.detphMaps.arrDepthData[i]);
-			if (!depthData.Load(ComposeDepthFilePath(i, "dmap"))) {
+      auto depthPath = ComposeDepthFilePath(i, "dmap");
+      if (!fileExistsAndIsNonZeroSize(depthPath))
+          continue;
+      VERBOSE("Pre-loading depth map %s.", depthPath.c_str());
+			if (!depthData.Load(depthPath)) {
           DEBUG("Could not load an expected depth map.");
       }
       // init images pair: reference image and the best neighbor view
@@ -2229,15 +2246,19 @@ void Scene::DenseReconstructionEstimate(void* pData)
           // process next image
       }
   }
-  for (size_t i = nStartFrame; i < nEndFrame; i++)
+  DEBUG("Loading images complete.");
+  for (size_t i = 0; i < images.GetSize(); i++)
   {
       DepthData& depthData(data.detphMaps.arrDepthData[i]);
+      auto depthPath = ComposeDepthFilePath(i, "dmap");
+      VERBOSE("Performing depth map filtration for %s.", depthPath.c_str());
+      if (!fileExistsAndIsNonZeroSize(depthPath))
+          continue;
       // apply filters
       data.detphMaps.RemoveSmallSegments(depthData);
       data.detphMaps.GapInterpolation(depthData);
-      std::string strPath = ComposeDepthFilePath(i, "dmap");
-      depthData.Save(strPath);
-      VERBOSE("Performed depth map filtration for %s.", strPath.c_str());
+      depthData.Save(depthPath);
+      VERBOSE("Performed depth map filtration for %s.", depthPath.c_str());
   }
   return true;
 } // DenseReconstructionDepthMap
