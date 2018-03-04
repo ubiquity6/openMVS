@@ -60,6 +60,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 	unsigned nMinViewsFuse;
 	unsigned nEstimateColors;
 	unsigned nEstimateNormals;
+  bool bFilter = true;
 	boost::program_options::options_description config("Densify options");
 	config.add_options()
 		("input-file,i", boost::program_options::value<std::string>(&OPT::strInputFileName), "input filename containing camera poses and image list")
@@ -70,6 +71,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		("number-views-fuse", boost::program_options::value<unsigned>(&nMinViewsFuse)->default_value(3), "minimum number of images that agrees with an estimate during fusion in order to consider it inlier")
 		("estimate-colors", boost::program_options::value<unsigned>(&nEstimateColors)->default_value(1), "estimate the colors for the dense point-cloud")
 		("estimate-normals", boost::program_options::value<unsigned>(&nEstimateNormals)->default_value(0), "estimate the normals for the dense point-cloud")
+    ("filter", boost::program_options::value<bool>(&bFilter)->default_value(true), "Filter the depth map too.")
 		;
 
 	// hidden options, allowed both on command line and

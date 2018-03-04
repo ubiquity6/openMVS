@@ -1659,7 +1659,7 @@ bool Scene::ComputeDepthMap(const int &i)
 	return true;
 }
 
-bool Scene::MergeDepthMaps()
+bool Scene::MergeDepthMaps(const bool bFilter)
 {
 	DenseDepthMapData data(*this);
 
@@ -1678,6 +1678,21 @@ bool Scene::MergeDepthMaps()
       ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
       if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
           // process next image
+      }
+  }
+  if (bFilter) {
+      for (size_t i = 0; i < data.images.GetSize(); i++)
+      {
+          DepthData& depthData(data.detphMaps.arrDepthData[i]);
+          auto depthPath = ComposeDepthFilePath(i, "dmap");
+          VERBOSE("Performing depth map filtration for %s.", depthPath.c_str());
+          if (!fileExistsAndIsNonZeroSize(depthPath))
+              continue;
+          // apply filters
+          data.detphMaps.RemoveSmallSegments(depthData);
+          data.detphMaps.GapInterpolation(depthData);
+          depthData.Save(depthPath);
+          VERBOSE("Performed depth map filtration for %s.", depthPath.c_str());
       }
   }
 
@@ -1946,14 +1961,15 @@ void Scene::DenseReconstructionEstimate(void* pData)
   {
       nStart = nFirstFrame; 
   }
-  int nStop;
-  if (nLastFrame > 0)
+  int nStop = images.GetSize();
+  if (nLastFrame >= 0)
   {
       nStop = nLastFrame;
   }
+  VERBOSE("Starting at frame %d and stopping at frame %d.",nStart,nStop);
 
 
-  for (size_t i = nFirstFrame; i < nLastFrame; i++)
+  for (size_t i = nStart; i < nStop; i++)
   {
       DepthData& depthData(data.detphMaps.arrDepthData[i]);
       auto depthPath = ComposeDepthFilePath(i, "dmap");
@@ -1970,7 +1986,7 @@ void Scene::DenseReconstructionEstimate(void* pData)
       }
   }
   DEBUG("Loading images complete.");
-  for (size_t i = nFirstFrame; i < nLastFrame; i++)
+  for (size_t i = nStart; i < nStop; i++)
   {
       DepthData& depthData(data.detphMaps.arrDepthData[i]);
       auto depthPath = ComposeDepthFilePath(i, "dmap");

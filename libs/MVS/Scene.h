@@ -80,7 +80,7 @@ public:
 	void DenseReconstructionEstimate(void*);
 	void DenseReconstructionFilter(void*);
   bool ComputeDepthMap(const int &i);
-  bool MergeDepthMaps();
+  bool MergeDepthMaps(const bool bFilter = true);
   // nFirstFrame is included, nLastFrame not
   bool FilterDepthMaps(const int nFirstFrame = -1, const int nLastFrame = -1);
 
