@@ -79,11 +79,8 @@ public:
 	bool DenseReconstruction();
 	void DenseReconstructionEstimate(void*);
 	void DenseReconstructionFilter(void*);
-  bool ComputeDepthMap(const int &i);
-  bool MergeDepthMaps(const bool bFilter = true);
-  // nFirstFrame is included, nLastFrame not
-  bool FilterDepthMaps(const int nFirstFrame = -1, const int nLastFrame = -1);
-
+    bool CalculateOrLoadDepthMaps(void *pIn);
+    bool ComputeDepthMap(const int &i);
 	// Mesh reconstruction
 	bool ReconstructMesh(float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,
 						 float kSigma=2.f, float kQual=1.f, float kb=4.f,

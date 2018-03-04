@@ -757,7 +757,7 @@ bool MVS::ExportDepthMap(const String& fileName, const DepthMap& depthMap, Depth
 		cList<Depth, const Depth, 0> depths(0, depthMap.area());
 		for (size_t i=depthMap.area(); i>0; ) {
 			const Depth depth = depthMap[--i];
-			ASSERT(depth == 0 || depth > 0);
+			//ASSERT(depth == 0 || depth > 0);
 			if (depth > 0)
 				depths.Insert(depth);
 		}
@@ -923,7 +923,7 @@ bool MVS::ExportPointCloud(const String& fileName, const Image& imageData, const
 		for (int j=0; j<depthMap.rows; ++j) {
 			for (int i=0; i<depthMap.cols; ++i) {
 				const Depth& depth = depthMap(j,i);
-				ASSERT(depth >= 0);
+				//ASSERT(depth >= 0);
 				if (depth <= 0)
 					continue;
 				const Point3f X(P0.TransformPointI2W(Point3(i,j,depth)));

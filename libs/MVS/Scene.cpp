@@ -450,7 +450,7 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		}
 	}
 	imageData.avgDepth /= nPoints;
-	ASSERT(nPoints > 3);
+	//ASSERT(nPoints > 3);
 
 	// select best neighborViews
 	Point2fArr pointsA(0, points.GetSize()), pointsB(0, points.GetSize());

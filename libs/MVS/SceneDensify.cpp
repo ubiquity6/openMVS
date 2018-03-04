@@ -41,20 +41,6 @@
 #include <string>
 #include <fstream>
 
-std::ifstream::pos_type fileSize(const std::string filename) {
-    std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
-    return in.tellg(); 
-}
-
-inline bool fileExistsAndIsNonZeroSize (const std::string& name) {
-    struct stat buffer;   
-    if (stat (name.c_str(), &buffer) == 0)
-    {
-        return (fileSize(name) > 0);
-    }
-    return false;
-}
-
 using namespace MVS;
 
 
@@ -539,7 +525,7 @@ bool DepthMapsData::InitDepthMap(DepthData& depthData)
 			if (!depthMap.isInside(pt))
 				return;
 			const float z(INVERT(normalPlane.dot(P.TransformPointI2C(Point2f(pt)))));
-			ASSERT(z > 0);
+			//ASSERT(z > 0);
 			depthMap(pt) = z;
 			normalMap(pt) = normal;
 		}
@@ -1624,6 +1610,7 @@ bool InitializeViews(DenseDepthMapData &data, ImageArr &images,
 		VERBOSE("Selecting images for dense reconstruction completed: %d images (%s)", data.images.GetSize(), TD_TIMER_GET_FMT().c_str());
 	}
 	}
+  return true;
 }
 
 bool Scene::ComputeDepthMap(const int &i)
@@ -1643,7 +1630,6 @@ bool Scene::ComputeDepthMap(const int &i)
   GET_LOGCONSOLE().Pause();
   DepthData& depthData(data.detphMaps.arrDepthData[i]);
   // init images pair: reference image and the best neighbor view
-  ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
   if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
       // process next image
       VERBOSE("Not computing depth map because image %d is not selected.",i);
@@ -1659,78 +1645,31 @@ bool Scene::ComputeDepthMap(const int &i)
 	return true;
 }
 
-bool Scene::MergeDepthMaps(const bool bFilter)
-{
-	DenseDepthMapData data(*this);
-
-  auto bReturn = InitializeViews(data, images, platforms);
-  if (!bReturn)
-      return false;
-
-  for (size_t i = 0; i < data.images.GetSize(); i++)
-  {
-      DepthData& depthData(data.detphMaps.arrDepthData[i]);
-      auto depthPath = ComposeDepthFilePath(i, "dmap");
-      if (!fileExistsAndIsNonZeroSize(depthPath))
-          continue;
-      depthData.Load(depthPath);
-      // init images pair: reference image and the best neighbor view
-      ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
-      if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
-          // process next image
-      }
-  }
-  if (bFilter) {
-      for (size_t i = 0; i < data.images.GetSize(); i++)
-      {
-          DepthData& depthData(data.detphMaps.arrDepthData[i]);
-          auto depthPath = ComposeDepthFilePath(i, "dmap");
-          VERBOSE("Performing depth map filtration for %s.", depthPath.c_str());
-          if (!fileExistsAndIsNonZeroSize(depthPath))
-              continue;
-          // apply filters
-          data.detphMaps.RemoveSmallSegments(depthData);
-          data.detphMaps.GapInterpolation(depthData);
-          depthData.Save(depthPath);
-          VERBOSE("Performed depth map filtration for %s.", depthPath.c_str());
-      }
-  }
-
-	// fuse all depth-maps
-	pointcloud.Release();
-	data.detphMaps.FuseDepthMaps(pointcloud, OPTDENSE::nEstimateNormals == 2);
-	#if TD_VERBOSE != TD_VERBOSE_OFF
-	if (g_nVerbosityLevel > 2) {
-		// print number of points with 3+ views
-		size_t nPoints1m(0), nPoints2(0), nPoints3p(0);
-		FOREACHPTR(pViews, pointcloud.pointViews) {
-			switch (pViews->GetSize())
-			{
-			case 0:
-			case 1:
-				++nPoints1m;
-				break;
-			case 2:
-				++nPoints2;
-				break;
-			default:
-				++nPoints3p;
-			}
-		}
-		VERBOSE("Dense point-cloud composed of:\n\t%u points with 1- views\n\t%u points with 2 views\n\t%u points with 3+ views", nPoints1m, nPoints2, nPoints3p);
-	}
-	#endif
-
-	if (!pointcloud.IsEmpty()) {
-		if (pointcloud.colors.IsEmpty() && OPTDENSE::nEstimateColors == 1)
-			EstimatePointColors(images, pointcloud);
-		if (pointcloud.normals.IsEmpty() && OPTDENSE::nEstimateNormals == 1)
-			EstimatePointNormals(images, pointcloud);
-	}
-	return true;
-} // DenseReconstructionDepthMap
-
-
+bool Scene::CalculateOrLoadDepthMaps(void *pIn) {
+    DenseDepthMapData &data = *((DenseDepthMapData*) pIn);
+    // initialize the queue of images to be processed
+    data.idxImage = 0;
+    ASSERT(data.events.IsEmpty());
+    data.events.AddEvent(new EVTProcessImage(0));
+    // start working threads
+    data.progress = new Util::Progress("Estimated depth-maps", data.images.GetSize());
+    if (nMaxThreads > 1) {
+        // multi-thread execution
+        cList<SEACAVE::Thread> threads(2);
+        FOREACHPTR(pThread, threads)
+        pThread->start(DenseReconstructionEstimateTmp, (void*)&data);
+        FOREACHPTR(pThread, threads)
+        pThread->join();
+    } else {
+        // single-thread execution
+        DenseReconstructionEstimate((void*)&data);
+    }
+    if (!data.events.IsEmpty())
+        return false;
+    data.progress.Release();
+    return true;
+}
+        
 bool Scene::DenseReconstruction()
 {
 	DenseDepthMapData data(*this);
@@ -1738,29 +1677,11 @@ bool Scene::DenseReconstruction()
   auto bReturn = InitializeViews(data, images, platforms);
   if (!bReturn)
       return false;
+    
+    bReturn = CalculateOrLoadDepthMaps(&data);
+    if (!bReturn)
+        return false;
 
-	// initialize the queue of images to be processed
-	data.idxImage = 0;
-	ASSERT(data.events.IsEmpty());
-	data.events.AddEvent(new EVTProcessImage(0));
-	// start working threads
-	data.progress = new Util::Progress("Estimated depth-maps", data.images.GetSize());
-	GET_LOGCONSOLE().Pause();
-	if (nMaxThreads > 1) {
-		// multi-thread execution
-		cList<SEACAVE::Thread> threads(2);
-		FOREACHPTR(pThread, threads)
-			pThread->start(DenseReconstructionEstimateTmp, (void*)&data);
-		FOREACHPTR(pThread, threads)
-			pThread->join();
-	} else {
-		// single-thread execution
-		DenseReconstructionEstimate((void*)&data);
-	}
-	GET_LOGCONSOLE().Play();
-	if (!data.events.IsEmpty())
-		return false;
-	data.progress.Release();
 
 	if ((OPTDENSE::nOptimize & OPTDENSE::ADJUST_FILTER) != 0) {
 		// initialize the queue of depth-maps to be filtered
@@ -1850,7 +1771,6 @@ void Scene::DenseReconstructionEstimate(void* pData)
 			const uint32_t idx = data.images[evtImage.idxImage];
 			DepthData& depthData(data.detphMaps.arrDepthData[idx]);
 			// init images pair: reference image and the best neighbor view
-			ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
 			if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[evtImage.idxImage], OPTDENSE::nNumViews)) {
 				// process next image
 				data.events.AddEvent(new EVTProcessImage((uint32_t)Thread::safeInc(data.idxImage)));
@@ -1948,59 +1868,6 @@ void Scene::DenseReconstructionEstimate(void* pData)
 } // DenseReconstructionDepthMapEstimate
 /*----------------------------------------------------------------*/
 
- bool Scene::FilterDepthMaps(const int nFirstFrame, const int nLastFrame)
-{
-	DenseDepthMapData data(*this);
-
-  auto bReturn = InitializeViews(data, images, platforms);
-  if (!bReturn)
-      return false;
-
-  int nStart = 0;
-  if (nFirstFrame >= 0)
-  {
-      nStart = nFirstFrame; 
-  }
-  int nStop = images.GetSize();
-  if (nLastFrame >= 0)
-  {
-      nStop = nLastFrame;
-  }
-  VERBOSE("Starting at frame %d and stopping at frame %d.",nStart,nStop);
-
-
-  for (size_t i = nStart; i < nStop; i++)
-  {
-      DepthData& depthData(data.detphMaps.arrDepthData[i]);
-      auto depthPath = ComposeDepthFilePath(i, "dmap");
-      if (!fileExistsAndIsNonZeroSize(depthPath))
-          continue;
-      VERBOSE("Pre-loading depth map %s.", depthPath.c_str());
-			if (!depthData.Load(depthPath)) {
-          DEBUG("Could not load an expected depth map.");
-      }
-      // init images pair: reference image and the best neighbor view
-      ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
-      if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
-          // process next image
-      }
-  }
-  DEBUG("Loading images complete.");
-  for (size_t i = nStart; i < nStop; i++)
-  {
-      DepthData& depthData(data.detphMaps.arrDepthData[i]);
-      auto depthPath = ComposeDepthFilePath(i, "dmap");
-      VERBOSE("Performing depth map filtration for %s.", depthPath.c_str());
-      if (!fileExistsAndIsNonZeroSize(depthPath))
-          continue;
-      // apply filters
-      data.detphMaps.RemoveSmallSegments(depthData);
-      data.detphMaps.GapInterpolation(depthData);
-      depthData.Save(depthPath);
-      VERBOSE("Performed depth map filtration for %s.", depthPath.c_str());
-  }
-  return true;
-} // DenseReconstructionDepthMap
 
 void* DenseReconstructionFilterTmp(void* arg) {
 	DenseDepthMapData& dataThreads = *((DenseDepthMapData*)arg);
