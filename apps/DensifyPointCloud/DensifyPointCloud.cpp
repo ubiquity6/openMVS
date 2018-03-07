@@ -44,6 +44,7 @@ using namespace MVS;
 // S T R U C T S ///////////////////////////////////////////////////
 
 namespace OPT {
+std::string strNeighborDataPath;
 String strInputFileName;
 String strOutputFileName;
 String strMeshFileName;
@@ -93,6 +94,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 	config.add_options()
 		("input-file,i", boost::program_options::value<std::string>(&OPT::strInputFileName), "input filename containing camera poses and image list")
 		("output-file,o", boost::program_options::value<std::string>(&OPT::strOutputFileName), "output filename for storing the dense point-cloud")
+        ("neighbor-data-path,n", boost::program_options::value<std::string>(&OPT::strNeighborDataPath), "Path to which to write a JSON metafile containing frame information. Program immediately exits without doing any work.")
 		("resolution-level", boost::program_options::value<unsigned>(&nResolutionLevel)->default_value(2), "how many times to scale down the images before point cloud computation")
 		("min-resolution", boost::program_options::value<unsigned>(&nMinResolution)->default_value(640), "do not scale images lower than this resolution")
 		("number-views", boost::program_options::value<unsigned>(&nNumViews)->default_value(4), "number of views used for depth-map estimation (0 - all neighbor views available)")
@@ -218,8 +220,12 @@ int main(int argc, LPCTSTR* argv)
 	}
 	if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
 		TD_TIMER_START();
-		if (!scene.DenseReconstruction())
+        if (!scene.DenseReconstruction(OPT::strNeighborDataPath))
 			return EXIT_FAILURE;
+        if (OPT::strNeighborDataPath.size() > 0)
+        {
+            LOG("Exiting immediately because --neighbor-data-path/-n argument was provided.");
+        }
 		VERBOSE("Densifying point-cloud completed: %u points (%s)", scene.pointcloud.points.GetSize(), TD_TIMER_GET_FMT().c_str());
 	}
 

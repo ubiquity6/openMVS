@@ -76,7 +76,7 @@ public:
 	bool ExportCamerasMLP(const String& fileName, const String& fileNameScene) const;
 
 	// Dense reconstruction
-	bool DenseReconstruction();
+    bool DenseReconstruction(const std::string strJSONExportPath);
 	void DenseReconstructionEstimate(void*);
 	void DenseReconstructionFilter(void*);
     bool CalculateOrLoadDepthMaps(void *pIn);

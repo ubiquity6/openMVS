@@ -40,6 +40,7 @@
 #include <CGAL/Projection_traits_xy_3.h>
 #include <string>
 #include <fstream>
+#include "json11.hpp"
 
 using namespace MVS;
 
@@ -1670,7 +1671,7 @@ bool Scene::CalculateOrLoadDepthMaps(void *pIn) {
     return true;
 }
         
-bool Scene::DenseReconstruction()
+bool Scene::DenseReconstruction(const std::string strJSONExportPath)
 {
 	DenseDepthMapData data(*this);
 
@@ -1678,6 +1679,32 @@ bool Scene::DenseReconstruction()
   if (!bReturn)
       return false;
     
+    if (strJSONExportPath.size() > 0)
+    {
+        json11::Json::object objToWrite;
+        for (size_t i = 0; i < data.images.GetSize(); i++)
+        {
+            const uint32_t idx = data.images[i];
+            DepthData& depthData(data.detphMaps.arrDepthData[idx]);
+            data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[idx], OPTDENSE::nNumViews);
+            String msg;
+            json11::Json::array arNeighbors;
+            for (IDX i=1; i<depthData.images.GetSize(); ++i)
+            {
+                size_t nNeighborIdx = depthData.images[i].pImageData-images.Begin();
+                arNeighbors.push_back(std::to_string(nNeighborIdx));
+                msg += std::to_string(nNeighborIdx) + ",";
+            }
+            objToWrite[std::to_string(idx)] = json11::Json(arNeighbors);
+            VERBOSE("Reference image %3u paired with %u views:%s (%u shared points)", idx, depthData.images.GetSize()-1, msg.c_str(), depthData.points.GetSize());
+        }
+        std::string strJSON = json11::Json(objToWrite).dump();
+        std::ofstream out(strJSONExportPath);
+        out << strJSON;
+        LOG("Wrote neighbor information to %s.", strJSONExportPath.c_str());
+        return true;
+    }
+
     bReturn = CalculateOrLoadDepthMaps(&data);
     if (!bReturn)
         return false;
