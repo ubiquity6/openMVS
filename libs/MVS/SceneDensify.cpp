@@ -1549,13 +1549,22 @@ bool InitializeViews(DenseDepthMapData &data, ImageArr &images,
 			// reload image at the appropriate resolution
 			const unsigned nMaxResolution(imageData.RecomputeMaxResolution(OPTDENSE::nResolutionLevel, OPTDENSE::nMinResolution));
 			if (!imageData.ReloadImage(nMaxResolution)) {
-				#ifdef DENSE_USE_OPENMP
-				bAbort = true;
-				#pragma omp flush (bAbort)
-				continue;
-				#else
-				return false;
-				#endif
+                {
+                    if (OPTDENSE::bUnsafe)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                         #ifdef DENSE_USE_OPENMP
+                         bAbort = true;
+                         #pragma omp flush (bAbort)
+                         continue;
+                         #else
+                         return false;
+                         #endif
+                    }
+                }
 			}
 			imageData.UpdateCamera(platforms);
 			// print image camera
@@ -1614,36 +1623,48 @@ bool InitializeViews(DenseDepthMapData &data, ImageArr &images,
   return true;
 }
 
-bool Scene::ComputeDepthMap(const int &i)
+bool Scene::ComputeDepthMap(const int &i, const std::vector<int> pairedFrames)
 {
-  DenseDepthMapData data(*this);
-
-  auto bReturn = InitializeViews(data, images, platforms);
-  if (!bReturn)
-      return false;
-
-	// initialize the queue of images to be processed
-	data.idxImage = 0;
-	ASSERT(data.events.IsEmpty());
-	data.events.AddEvent(new EVTProcessImage(0));
-	// start working threads
-	data.progress = new Util::Progress("Estimated depth-maps", data.images.GetSize());
-  GET_LOGCONSOLE().Pause();
-  DepthData& depthData(data.detphMaps.arrDepthData[i]);
-  // init images pair: reference image and the best neighbor view
-  if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
-      // process next image
-      VERBOSE("Not computing depth map because image %d is not selected.",i);
-      return false;
-  }
-  data.detphMaps.EstimateDepthMap(i);
-  // Export
-  std::string strPath = ComposeDepthFilePath(i, "dmap");
-  depthData.Save(strPath);
-  VERBOSE("Performed depth map calculation for %s.", strPath.c_str());
-  depthData.ReleaseImages();
-  depthData.Release();
-	return true;
+    DenseDepthMapData data(*this);
+    DepthData& depthData(data.detphMaps.arrDepthData[i]);
+    if (pairedFrames.size() > 0)
+    {
+        LOG("%ud neighbors.",data.detphMaps.arrDepthData.GetSize());
+        for (auto i : pairedFrames)
+        {
+            depthData.images.AddEmpty();
+            depthData.images[0].pImageData = &images[i];
+            LOG("Neighbor: %ud",i);
+        }
+    }
+    else
+    {
+        auto bReturn = InitializeViews(data, images, platforms);
+        if (!bReturn)
+            return false;
+        
+        // initialize the queue of images to be processed
+        data.idxImage = 0;
+        ASSERT(data.events.IsEmpty());
+        data.events.AddEvent(new EVTProcessImage(0));
+        // start working threads
+        data.progress = new Util::Progress("Estimated depth-maps", data.images.GetSize());
+        GET_LOGCONSOLE().Pause();
+        // init images pair: reference image and the best neighbor view
+        if (!data.detphMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[i], OPTDENSE::nNumViews)) {
+            // process next image
+            VERBOSE("Not computing depth map because image %d is not selected.",i);
+            return false;
+        }
+    }
+    data.detphMaps.EstimateDepthMap(i);
+    // Export
+    std::string strPath = ComposeDepthFilePath(i, "dmap");
+    depthData.Save(strPath);
+    VERBOSE("Performed depth map calculation for %s.", strPath.c_str());
+    depthData.ReleaseImages();
+    depthData.Release();
+    return true;
 }
 
 bool Scene::CalculateOrLoadDepthMaps(void *pIn) {

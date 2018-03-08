@@ -3,6 +3,7 @@
 #include "../../libs/MVS/Common.h"
 #include "../../libs/MVS/Scene.h"
 #include <boost/program_options.hpp>
+#include "../../libs/MVS/json11.hpp"
 
 using namespace MVS;
 
@@ -17,6 +18,7 @@ using namespace MVS;
 namespace OPT {
 String strInputFileName;
 String strOutputFileName;
+std::string strNeighborDataPath;
 String strMeshFileName;
 String strDenseConfigFileName;
 int nArchiveType;
@@ -65,6 +67,7 @@ size_t Initialize(size_t argc, LPCTSTR* argv)
 		("output-file,o", boost::program_options::value<std::string>(&OPT::strOutputFileName), "output filename for storing the dense point-cloud")
 		("resolution-level", boost::program_options::value<unsigned>(&nResolutionLevel)->default_value(2), "how many times to scale down the images before point cloud computation")
 		("min-resolution", boost::program_options::value<unsigned>(&nMinResolution)->default_value(640), "do not scale images lower than this resolution")
+        ("neighbor-data-path,n", boost::program_options::value<std::string>(&OPT::strNeighborDataPath), "Path to which to write a JSON metafile containing frame information. Program immediately exits without doing any work.")
 		("number-views", boost::program_options::value<unsigned>(&nNumViews)->default_value(4), "number of views used for depth-map estimation (0 - all neighbor views available)")
 		;
 
@@ -181,9 +184,32 @@ int main(int argc, LPCTSTR* argv)
 		VERBOSE("error: empty initial point-cloud");
 		return EXIT_FAILURE;
 	}
+    std::vector<int> vNeighbors;
+    if (OPT::strNeighborDataPath.size() > 0)
+    {
+        LOG("Parsing log file at %s.",OPT::strNeighborDataPath.c_str());
+        std::ifstream t(OPT::strNeighborDataPath);
+        std::string strJSON((std::istreambuf_iterator<char>(t)),
+                            std::istreambuf_iterator<char>());
+        std::string strParseError;
+        auto jsonResult = json11::Json::parse(strJSON,strParseError);
+        auto jsonThisFrame = jsonResult[std::to_string(nDepthIdx)];
+        if(!jsonThisFrame.is_array())
+        {
+            LOG("Input JSON file does not contain info on frame %d",nDepthIdx);
+            return EXIT_FAILURE;
+        }
+        auto jsonNeighbors = jsonThisFrame.array_items();
+        for (auto json : jsonNeighbors)
+        {
+            LOG("Neighbor frame: %s",json.string_value().c_str());
+            vNeighbors.push_back(atoi(json.string_value().c_str()));
+        }
+        OPTDENSE::bUnsafe = true;
+    }
 	if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
 		TD_TIMER_START();
-		if (!scene.ComputeDepthMap(nDepthIdx))
+		if (!scene.ComputeDepthMap(nDepthIdx, vNeighbors))
 			return EXIT_FAILURE;
 		VERBOSE("Created depth map for %d",nDepthIdx);
 	}

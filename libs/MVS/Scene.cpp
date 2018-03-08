@@ -133,7 +133,13 @@ bool Scene::LoadInterface(const String & fileName)
 		} else {
 			// read image header for resolution
 			if (!imageData.ReloadImage(0, false))
-				return false;
+            {
+                if (OPTDENSE::bUnsafe)
+                {
+                    continue;
+                }
+                return false;
+            }
 		}
 		imageData.UpdateCamera(platforms);
 		++nCalibratedImages;
