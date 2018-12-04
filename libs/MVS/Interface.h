@@ -276,7 +276,10 @@ ARCHIVE_DEFINE_TYPE(uint32_t)
 ARCHIVE_DEFINE_TYPE(uint64_t)
 ARCHIVE_DEFINE_TYPE(float)
 ARCHIVE_DEFINE_TYPE(double)
+// uint64_t and size_t are not the same on Clang
+#if defined(__clang__)
 ARCHIVE_DEFINE_TYPE(size_t)
+#endif
 
 // Serialization support for cv::Matx
 template<typename _Tp, int m, int n>
