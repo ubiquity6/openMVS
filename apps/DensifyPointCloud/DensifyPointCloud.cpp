@@ -239,15 +239,11 @@ int main(int argc, LPCTSTR* argv)
 		TD_TIMER_START();
         if (!scene.DenseReconstruction(OPT::strNeighborDataPath))
 			return EXIT_FAILURE;
-<<<<<<< HEAD
         if (OPT::strNeighborDataPath.size() > 0)
         {
             LOG("Exiting immediately because --neighbor-data-path/-n argument was provided.");
         }
 		VERBOSE("Densifying point-cloud completed: %u points (%s)", scene.pointcloud.points.GetSize(), TD_TIMER_GET_FMT().c_str());
-=======
-		VERBOSE("Densifying point-cloud completed: %u points (%s)", scene.pointcloud.GetSize(), TD_TIMER_GET_FMT().c_str());
->>>>>>> upstream/master
 	}
 
 	// save the final mesh
