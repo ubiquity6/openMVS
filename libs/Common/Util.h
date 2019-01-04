@@ -340,6 +340,11 @@ public:
 		return getCurrentFolder()+str;
 	}
 
+	static String getFullFileName(const String& path) {
+		const String::size_type i = path.rfind('.');
+		return (i != String::npos) ? String(path.substr(0, i)) : path;
+	}
+
 	static inline bool isParentFolder(LPCTSTR path, int off=0) {
 		// returns true if the folder starting at the given position in path is the parent folder ".."
 		if (off < 0 || path[off] != _T('.'))
