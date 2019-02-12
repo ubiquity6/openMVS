@@ -76,10 +76,11 @@ public:
 	bool ExportCamerasMLP(const String& fileName, const String& fileNameScene) const;
 
 	// Dense reconstruction
-	bool DenseReconstruction();
+    bool DenseReconstruction(const std::string strJSONExportPath);
 	void DenseReconstructionEstimate(void*);
 	void DenseReconstructionFilter(void*);
-
+    bool CalculateOrLoadDepthMaps(void *pIn);
+    bool ComputeDepthMap(const int &i, const std::vector<int> pairedFrames = std::vector<int>());
 	// Mesh reconstruction
 	bool ReconstructMesh(float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,
 						 float kSigma=2.f, float kQual=1.f, float kb=4.f,

@@ -15,6 +15,7 @@ endif()
 FIND_PACKAGE(CERES ${SYSTEM_PACKAGE_REQUIRED})
 if(CERES_FOUND)
 	include_directories(${CERES_INCLUDE_DIRS})
+  include_directories(${CERES_INCLUDE_DIRS}/ceres/internal/miniglog/)
 	add_definitions(${CERES_DEFINITIONS})
 endif()
 

@@ -133,7 +133,13 @@ bool Scene::LoadInterface(const String & fileName)
 		} else {
 			// read image header for resolution
 			if (!imageData.ReloadImage(0, false))
-				return false;
+            {
+                if (OPTDENSE::bUnsafe)
+                {
+                    continue;
+                }
+                return false;
+            }
 		}
 		imageData.UpdateCamera(platforms);
 		++nCalibratedImages;
@@ -450,7 +456,7 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		}
 	}
 	imageData.avgDepth /= nPoints;
-	ASSERT(nPoints > 3);
+	//ASSERT(nPoints > 3);
 
 	// select best neighborViews
 	Point2fArr pointsA(0, points.GetSize()), pointsB(0, points.GetSize());

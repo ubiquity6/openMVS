@@ -71,6 +71,7 @@ MDEFVAR_OPTDENSE_uint32(nMinViewsFilterAdjust, "Min Views Filter Adjust", "minim
 MDEFVAR_OPTDENSE_uint32(nMinViewsTrustPoint, "Min Views Trust Point", "min-number of views so that the point is considered for approximating the depth-maps (<2 - random initialization)", "2")
 MDEFVAR_OPTDENSE_uint32(nNumViews, "Num Views", "Number of views used for depth-map estimation (0 - all views available)", "1", "0")
 MDEFVAR_OPTDENSE_bool(bFilterAdjust, "Filter Adjust", "adjust depth estimates during filtering", "1")
+MDEFVAR_OPTDENSE_bool(bUnsafe, "Ignore Safety Checks", "ignore safety checks and allow missing images.", "0")
 MDEFVAR_OPTDENSE_bool(bAddCorners, "Add Corners", "add support points at image corners with nearest neighbor disparities", "1")
 MDEFVAR_OPTDENSE_float(fViewMinScore, "View Min Score", "Min score to consider a neighbor images (0 - disabled)", "2.0")
 MDEFVAR_OPTDENSE_float(fViewMinScoreRatio, "View Min Score Ratio", "Min score ratio to consider a neighbor images", "0.3")
@@ -757,7 +758,7 @@ bool MVS::ExportDepthMap(const String& fileName, const DepthMap& depthMap, Depth
 		cList<Depth, const Depth, 0> depths(0, depthMap.area());
 		for (size_t i=depthMap.area(); i>0; ) {
 			const Depth depth = depthMap[--i];
-			ASSERT(depth == 0 || depth > 0);
+			//ASSERT(depth == 0 || depth > 0);
 			if (depth > 0)
 				depths.Insert(depth);
 		}
@@ -923,7 +924,7 @@ bool MVS::ExportPointCloud(const String& fileName, const Image& imageData, const
 		for (int j=0; j<depthMap.rows; ++j) {
 			for (int i=0; i<depthMap.cols; ++i) {
 				const Depth& depth = depthMap(j,i);
-				ASSERT(depth >= 0);
+				//ASSERT(depth >= 0);
 				if (depth <= 0)
 					continue;
 				const Point3f X(P0.TransformPointI2W(Point3(i,j,depth)));

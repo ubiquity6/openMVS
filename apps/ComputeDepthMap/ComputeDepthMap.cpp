@@ -1,37 +1,9 @@
-/*
- * DensifyPointCloud.cpp
- *
- * Copyright (c) 2014-2015 SEACAVE
- *
- * Author(s):
- *
- *      cDc <cdc.seacave@gmail.com>
- *
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- *
- * Additional Terms:
- *
- *      You are required to preserve legal notices and author attributions in
- *      that material or in the Appropriate Legal Notices displayed by works
- *      containing it.
- */
+// Based on DensifyPointCloud
 
 #include "../../libs/MVS/Common.h"
 #include "../../libs/MVS/Scene.h"
 #include <boost/program_options.hpp>
+#include "../../libs/MVS/json11.hpp"
 
 using namespace MVS;
 
@@ -44,9 +16,9 @@ using namespace MVS;
 // S T R U C T S ///////////////////////////////////////////////////
 
 namespace OPT {
-std::string strNeighborDataPath;
 String strInputFileName;
 String strOutputFileName;
+std::string strNeighborDataPath;
 String strMeshFileName;
 String strDenseConfigFileName;
 int nArchiveType;
@@ -57,7 +29,7 @@ boost::program_options::variables_map vm;
 } // namespace OPT
 
 // initialize and parse the command line parameters
-bool Initialize(size_t argc, LPCTSTR* argv)
+size_t Initialize(size_t argc, LPCTSTR* argv)
 {
 	// initialize log and console
 	OPEN_LOG();
@@ -87,20 +59,16 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 	unsigned nResolutionLevel;
 	unsigned nMinResolution;
 	unsigned nNumViews;
-	unsigned nMinViewsFuse;
-	unsigned nEstimateColors;
-	unsigned nEstimateNormals;
+  int nDepthIdx;
 	boost::program_options::options_description config("Densify options");
 	config.add_options()
+    ("depth-idx,d", boost::program_options::value<int>(&nDepthIdx), "Depth map to compute (and exit afterward).")
 		("input-file,i", boost::program_options::value<std::string>(&OPT::strInputFileName), "input filename containing camera poses and image list")
 		("output-file,o", boost::program_options::value<std::string>(&OPT::strOutputFileName), "output filename for storing the dense point-cloud")
-        ("neighbor-data-path,n", boost::program_options::value<std::string>(&OPT::strNeighborDataPath), "Path to which to write a JSON metafile containing frame information. Program immediately exits without doing any work.")
 		("resolution-level", boost::program_options::value<unsigned>(&nResolutionLevel)->default_value(2), "how many times to scale down the images before point cloud computation")
 		("min-resolution", boost::program_options::value<unsigned>(&nMinResolution)->default_value(640), "do not scale images lower than this resolution")
+        ("neighbor-data-path,n", boost::program_options::value<std::string>(&OPT::strNeighborDataPath), "Path to which to write a JSON metafile containing frame information. Program immediately exits without doing any work.")
 		("number-views", boost::program_options::value<unsigned>(&nNumViews)->default_value(4), "number of views used for depth-map estimation (0 - all neighbor views available)")
-		("number-views-fuse", boost::program_options::value<unsigned>(&nMinViewsFuse)->default_value(3), "minimum number of images that agrees with an estimate during fusion in order to consider it inlier")
-		("estimate-colors", boost::program_options::value<unsigned>(&nEstimateColors)->default_value(1), "estimate the colors for the dense point-cloud")
-		("estimate-normals", boost::program_options::value<unsigned>(&nEstimateNormals)->default_value(0), "estimate the normals for the dense point-cloud")
 		;
 
 	// hidden options, allowed both on command line and
@@ -133,7 +101,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 	}
 	catch (const std::exception& e) {
 		LOG(e.what());
-		return false;
+		return -1;
 	}
 
 	// initialize the log file
@@ -152,7 +120,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		GET_LOG() << visible;
 	}
 	if (OPT::strInputFileName.IsEmpty())
-		return false;
+		return -1;
 
 	// initialize optional options
 	Util::ensureValidPath(OPT::strOutputFileName);
@@ -167,9 +135,6 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 	OPTDENSE::nResolutionLevel = nResolutionLevel;
 	OPTDENSE::nMinResolution = nMinResolution;
 	OPTDENSE::nNumViews = nNumViews;
-	OPTDENSE::nMinViewsFuse = nMinViewsFuse;
-	OPTDENSE::nEstimateColors = nEstimateColors;
-	OPTDENSE::nEstimateNormals = nEstimateNormals;
 	if (!bValidConfig)
 		OPTDENSE::oConfig.Save(OPT::strDenseConfigFileName);
 
@@ -184,7 +149,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 	// start memory dumper
 	MiniDumper::Create(APPNAME, WORKING_FOLDER);
 	#endif
-	return true;
+	return nDepthIdx;
 }
 
 // finalize application instance
@@ -207,7 +172,8 @@ int main(int argc, LPCTSTR* argv)
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);// | _CRTDBG_CHECK_ALWAYS_DF);
 	#endif
 
-	if (!Initialize(argc, argv))
+  int nDepthIdx = Initialize(argc, argv);
+	if (nDepthIdx == -1)
 		return EXIT_FAILURE;
 
 	Scene scene(OPT::nMaxThreads);
@@ -218,29 +184,37 @@ int main(int argc, LPCTSTR* argv)
 		VERBOSE("error: empty initial point-cloud");
 		return EXIT_FAILURE;
 	}
+    std::vector<int> vNeighbors;
+    if (OPT::strNeighborDataPath.size() > 0)
+    {
+        LOG("Parsing log file at %s.",OPT::strNeighborDataPath.c_str());
+        std::ifstream t(OPT::strNeighborDataPath);
+        std::string strJSON((std::istreambuf_iterator<char>(t)),
+                            std::istreambuf_iterator<char>());
+        std::string strParseError;
+        auto jsonResult = json11::Json::parse(strJSON,strParseError);
+        auto jsonThisFrame = jsonResult[std::to_string(nDepthIdx)];
+        if(!jsonThisFrame.is_array())
+        {
+            LOG("Input JSON file does not contain info on frame %d",nDepthIdx);
+            return EXIT_FAILURE;
+        }
+        auto jsonNeighbors = jsonThisFrame.array_items();
+        for (auto json : jsonNeighbors)
+        {
+            LOG("Neighbor frame: %s",json.string_value().c_str());
+            vNeighbors.push_back(atoi(json.string_value().c_str()));
+        }
+        OPTDENSE::bUnsafe = true;
+    }
 	if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
 		TD_TIMER_START();
-        if (!scene.DenseReconstruction(OPT::strNeighborDataPath))
+		if (!scene.ComputeDepthMap(nDepthIdx, vNeighbors))
 			return EXIT_FAILURE;
-        if (OPT::strNeighborDataPath.size() > 0)
-        {
-            LOG("Exiting immediately because --neighbor-data-path/-n argument was provided.");
-        }
-		VERBOSE("Densifying point-cloud completed: %u points (%s)", scene.pointcloud.points.GetSize(), TD_TIMER_GET_FMT().c_str());
+		VERBOSE("Created depth map for %d",nDepthIdx);
 	}
 
-	// save the final mesh
-	const String baseFileName(MAKE_PATH_SAFE(Util::getFullFileName(OPT::strOutputFileName)));
-	scene.Save(baseFileName+_T(".mvs"), (ARCHIVE_TYPE)OPT::nArchiveType);
-	scene.pointcloud.Save(baseFileName+_T(".ply"));
-  /*
-	#if TD_VERBOSE != TD_VERBOSE_OFF
-	if (VERBOSITY_LEVEL > 2)
-		scene.ExportCamerasMLP(baseFileName+_T(".mlp"), baseFileName+_T(".ply"));
-	#endif
-
 	Finalize();
-  */
 	return EXIT_SUCCESS;
 }
 /*----------------------------------------------------------------*/

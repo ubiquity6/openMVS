@@ -65,6 +65,7 @@ if(OpenMVS_USE_OPENMP)
 		message("-- Can't find OpenMP. Continuing without it.")
 	endif()
 endif()
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=core-avx-i")
 
 if(OpenMVS_USE_OPENGL)
 	FIND_PACKAGE(OpenGL)
@@ -167,7 +168,7 @@ export(TARGETS Common IO Math MVS FILE "${PROJECT_BINARY_DIR}/OpenMVSTargets.cma
 # Export the package for use from the build-tree
 # (this registers the build-tree with a global CMake-registry)
 export(PACKAGE OpenMVS)
- 
+
 # Create the OpenMVSConfig.cmake and OpenMVSConfigVersion files
 file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}" "${INSTALL_INCLUDE_DIR}")
 # ... for the build tree
@@ -178,7 +179,7 @@ set(CONF_INCLUDE_DIRS "${INSTALL_CMAKE_DIR}/${REL_INCLUDE_DIR}")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/build/OpenMVSConfig.cmake.in" "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMVSConfig.cmake" @ONLY)
 # ... for both
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/build/OpenMVSConfigVersion.cmake.in" "${PROJECT_BINARY_DIR}/OpenMVSConfigVersion.cmake" @ONLY)
- 
+
 # Install the OpenMVSConfig.cmake and OpenMVSConfigVersion.cmake
 install(FILES
 	"${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMVSConfig.cmake"
