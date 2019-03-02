@@ -391,7 +391,7 @@ void TFrustum<TYPE,DIMS>::Set(const MATRIX3x4& m, TYPE w, TYPE h, TYPE n, TYPE f
 {
 	MATRIX4x4 M(MATRIX4x4::Identity());
 	//M.template topLeftCorner<3,4>() = m;
-	M.topLeftCorner<3,4>() = m;
+	M.topLeftCorner(3,4) = m;
 	Set(M, w, h, n, f);
 } // Set
 /*----------------------------------------------------------------*/
