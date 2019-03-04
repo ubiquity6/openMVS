@@ -206,7 +206,7 @@ bool TPlane<TYPE,DIMS>::Intersects(const POINT& p0, const POINT& p1, const POINT
 
 // Intersection with AABB. Search for AABB diagonal that is most
 // aligned to plane normal. Test its two vertices against plane.
-// (Möller/Haines, "Real-Time Rendering")
+// (Mï¿½ller/Haines, "Real-Time Rendering")
 template <typename TYPE, int DIMS>
 bool TPlane<TYPE,DIMS>::Intersects(const AABB& aabb) const
 {
@@ -390,7 +390,7 @@ template <typename TYPE, int DIMS>
 void TFrustum<TYPE,DIMS>::Set(const MATRIX3x4& m, TYPE w, TYPE h, TYPE n, TYPE f)
 {
 	MATRIX4x4 M(MATRIX4x4::Identity());
-	M.template topLeftCorner<3,4>() = m;
+	M.topLeftCorner(3,4) = m;
 	Set(M, w, h, n, f);
 } // Set
 /*----------------------------------------------------------------*/
