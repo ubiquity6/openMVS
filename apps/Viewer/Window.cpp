@@ -124,7 +124,6 @@ void Window::Reset()
 void Window::UpdateView(const ImageArr& images, const MVS::ImageArr& sceneImages)
 {
 	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
 	if (camera->prevCamID != camera->currentCamID && camera->currentCamID != NO_ID) {
 		// enable camera view mode
 		// apply current camera transform
@@ -132,13 +131,12 @@ void Window::UpdateView(const ImageArr& images, const MVS::ImageArr& sceneImages
 		const MVS::Image& imageData = sceneImages[image.idx];
 		const MVS::Camera& camera = imageData.camera;
 		const Eigen::Matrix4d trans(TransW2L((const Matrix3x3::EMat)camera.R, camera.GetT()));
-		glMultMatrixf((GLfloat*)gs_convert);
+		glLoadMatrixf((GLfloat*)gs_convert);
 		glMultMatrixd((GLdouble*)trans.data());
 	} else {
 		// apply view point transform
-		Eigen::Vector3d eye, center, up;
-		camera->GetLookAt(eye, center, up);
-		gluLookAt(eye.x(), eye.y(), eye.z(), center.x(), center.y(), center.z(), up.x(), up.y(), up.z());
+		const Eigen::Matrix4d trans(camera->GetLookAt());
+		glLoadMatrixd((GLdouble*)trans.data());
 	}
 }
 
@@ -294,7 +292,7 @@ void Window::MouseButton(int button, int action, int /*mods*/)
 		// 4d World Coordinates
 		const Mat4 invV(V.inverse());
 		ASSERT(ISEQUAL(invV(3,3),1.0));
-		Eigen::Vector3d start(invV.topRightCorner<3,1>());
+		const Eigen::Vector3d start(invV.topRightCorner<3,1>());
 		const Eigen::Vector4d ray_wor(invV*ray_eye);
 		const Eigen::Vector3d dir(ray_wor.topRows<3>().normalized());
 		clbkRayScene(Ray3d(start, dir), action);
