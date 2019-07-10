@@ -3046,6 +3046,14 @@ void BlurredImageAndDerivatives(const TImage<Type>& in, TImage<Type>& blurred, T
 
 // C L A S S  //////////////////////////////////////////////////////
 
+template <typename TYPE>
+const int TBitMatrix<TYPE>::numBitsShift = log2i<TBitMatrix::numBitsPerCell>();
+/*----------------------------------------------------------------*/
+
+
+
+// C L A S S  //////////////////////////////////////////////////////
+
 // returns determinant, note that if it's zero no inversion done;
 // use Mi == M to store result into M
 template<typename TYPE>

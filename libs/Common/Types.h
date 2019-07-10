@@ -599,7 +599,9 @@ typedef class GENERAL_API cList<double, double, 0>      DoubleArr;
 #define ATAN2			std::atan2
 #define POW				std::pow
 #define POWI			SEACAVE::powi
+#ifdef USE_CPP14
 #define LOG2I			SEACAVE::log2i
+#endif
 
 
 namespace SEACAVE {
@@ -634,8 +636,14 @@ template<typename T>
 inline T LOG10(const T& a) {
 	return T(log10(a));
 }
+
+// while is not supported in constexpr by C++11
 template<typename T>
+#ifdef USE_CPP14
 constexpr T powi(T base, int exp) {
+#else
+inline T powi(T base, int exp) {
+#endif
 	T result(1);
 	while (exp) {
 		if (exp & 1)
@@ -645,6 +653,7 @@ constexpr T powi(T base, int exp) {
 	}
 	return result;
 }
+#ifdef USE_CPP14
 constexpr int log2i(int val) {
 	int ret = -1;
 	while (val > 0) {
@@ -657,11 +666,27 @@ template <int N> constexpr inline int log2i() { return 1+log2i<(N>>1)>(); }
 template <>   constexpr inline int log2i<0>() { return -1; }
 template <>   constexpr inline int log2i<1>() { return 0; }
 template <>   constexpr inline int log2i<2>() { return 1; }
+#else
+inline int log2i(int val) {
+	int ret = -1;
+	while (val > 0) {
+		val >>= 1;
+		ret++;
+	}
+	return ret;
+}
+template <int N> inline int log2i() { return 1+log2i<(N>>1)>(); }
+template <> inline int log2i<0>() { return -1; }
+template <> inline int log2i<1>() { return 0; }
+template <> inline int log2i<2>() { return 1; }
+#endif
 
 template<typename T>
 inline T arithmeticSeries(T n, T a1=1, T d=1) {
 	return (n*(a1*2+(n-1)*d))/2;
 }
+
+#if 0
 template<typename T>
 constexpr T factorial(T n) {
 	T ret = 1;
@@ -669,10 +694,11 @@ constexpr T factorial(T n) {
 		ret *= n--;
 	return ret;
 }
+#endif
 template<typename T>
 constexpr T combinations(const T& n, const T& k) {
 	ASSERT(n >= k);
-	#if 1
+	#if 0
 	T num = n;
 	const T den = factorial(k);
 	for (T i=n-k+1; i<n; ++i)
@@ -2082,7 +2108,10 @@ public:
 	};
 
 	enum { numBitsPerCell = sizeof(Type)*8 };
+#ifdef USE_CPP14
 	enum { numBitsShift = LOG2I<TBitMatrix::numBitsPerCell>() };
+#endif
+  static const int numBitsShift;
 
 public:
 	inline TBitMatrix() : data(NULL) {}
