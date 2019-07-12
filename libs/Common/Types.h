@@ -343,8 +343,11 @@ inline T MAXF3(const T& x1, const T& x2, const T& x3) {
 }
 
 #ifndef RAND
-#define RAND			std::rand
+#define RAND      rand_tls
 #endif
+
+int rand_tls();
+
 template<typename T>
 FORCEINLINE T RANDOM() { return T(RAND())/RAND_MAX; }
 

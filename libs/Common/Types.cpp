@@ -71,6 +71,13 @@ String cvMat2String(const cv::Mat& M, LPCSTR format) {
 }
 /*----------------------------------------------------------------*/
 
+
+int rand_tls() {
+  static thread_local std::default_random_engine generator;
+  static thread_local std::uniform_int_distribution<int> distribution(0, RAND_MAX);
+  return distribution(generator);
+}
+
 } // namespace SEACAVE
 
 
