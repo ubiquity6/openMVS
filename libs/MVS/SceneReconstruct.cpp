@@ -53,7 +53,7 @@ using namespace MVS;
 #endif
 
 // uncomment to enable reconstruction algorithm of weakly supported surfaces
-#define DELAUNAY_WEAKSURF
+//#define DELAUNAY_WEAKSURF
 
 // uncomment to use IBFS algorithm for max-flow
 // (faster, but not clear license policy)
